@@ -4,10 +4,31 @@ import '../models/character_model.dart';
 import '../services/api_service.dart';
 import '../providers/app_provider.dart';
 
-class DetailScreen extends StatelessWidget {
+class DetailScreen extends StatefulWidget {
   final int characterId;
 
   const DetailScreen({super.key, required this.characterId});
+
+  @override
+  State<DetailScreen> createState() => _DetailScreenState();
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  // Future disimpan di state supaya API tidak dipanggil ulang
+  // setiap kali favorit di-toggle (build dijalankan ulang).
+  late Future<Character> _characterFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _characterFuture = ApiService.fetchCharacterDetail(widget.characterId);
+  }
+
+  void _retry() {
+    setState(() {
+      _characterFuture = ApiService.fetchCharacterDetail(widget.characterId);
+    });
+  }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -85,7 +106,7 @@ class DetailScreen extends StatelessWidget {
     const purpleDark = Color(0xFF2A2142);
 
     return FutureBuilder<Character>(
-      future: ApiService.fetchCharacterDetail(characterId),
+      future: _characterFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
@@ -95,7 +116,24 @@ class DetailScreen extends StatelessWidget {
         } else if (snapshot.hasError || !snapshot.hasData) {
           return Scaffold(
             appBar: AppBar(title: const Text('Detail Karakter')),
-            body: Center(child: Text('Error: ${snapshot.error}')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.cloud_off, size: 48, color: purplePrimary),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Gagal memuat detail karakter',
+                    style: TextStyle(color: purpleDark),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: _retry,
+                    child: const Text('Coba Lagi'),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
@@ -139,7 +177,6 @@ class DetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-   
                 ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: Hero(
@@ -153,7 +190,6 @@ class DetailScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -169,7 +205,8 @@ class DetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: statusColor.withAlpha(150),
                         borderRadius: BorderRadius.circular(20),
@@ -200,7 +237,6 @@ class DetailScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 18),
-
                 const Text(
                   'Deskripsi Karakter',
                   style: TextStyle(
@@ -215,13 +251,12 @@ class DetailScreen extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.55,
-                    color: purpleDark.withAlpha(217), // 0.85 * 255
+                    color: purpleDark.withAlpha(217),
                   ),
                 ),
                 const SizedBox(height: 22),
                 const Divider(color: Color(0xFFE8E1F7)),
                 const SizedBox(height: 8),
-
                 const Text(
                   'Informasi Lengkap',
                   style: TextStyle(
@@ -231,10 +266,12 @@ class DetailScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                _buildDetailRow(Icons.category_outlined, 'Species', char.species),
+                _buildDetailRow(
+                    Icons.category_outlined, 'Species', char.species),
                 _buildDetailRow(Icons.wc_outlined, 'Gender', char.gender),
                 _buildDetailRow(Icons.public_outlined, 'Origin', char.origin),
-                _buildDetailRow(Icons.location_on_outlined, 'Last Known Location', char.location),
+                _buildDetailRow(Icons.location_on_outlined,
+                    'Last Known Location', char.location),
               ],
             ),
           ),

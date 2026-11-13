@@ -18,7 +18,8 @@ class ApiService {
       queryParams['name'] = name.trim();
     }
 
-    final uri = Uri.parse('$baseUrl/character').replace(queryParameters: queryParams);
+    final uri =
+        Uri.parse('$baseUrl/character').replace(queryParameters: queryParams);
     final response = await http.get(uri);
 
     if (response.statusCode == 200) {
@@ -41,14 +42,23 @@ class ApiService {
     }
   }
 
+  /// Mengambil SEMUA episode dengan mengikuti `info.next` sampai habis
+  /// (API mengembalikan maksimal 20 data per halaman).
   static Future<List<Episode>> fetchEpisodes() async {
-    final response = await http.get(Uri.parse('$baseUrl/episode'));
-    if (response.statusCode == 200) {
+    final List<Episode> all = [];
+    String? url = '$baseUrl/episode';
+
+    while (url != null) {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) {
+        throw Exception('Gagal memuat daftar episode');
+      }
       final data = jsonDecode(response.body);
       final List results = data['results'];
-      return results.map((e) => Episode.fromJson(e)).toList();
-    } else {
-      throw Exception('Gagal memuat daftar episode');
+      all.addAll(results.map((e) => Episode.fromJson(e)));
+      url = data['info']['next'] as String?;
     }
+
+    return all;
   }
 }

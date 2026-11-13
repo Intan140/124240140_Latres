@@ -4,9 +4,9 @@ class Character {
   final String status;
   final String species;
   final String gender;
-  final String image;
   final String origin;
   final String location;
+  final String image;
 
   Character({
     required this.id,
@@ -14,21 +14,53 @@ class Character {
     required this.status,
     required this.species,
     required this.gender,
-    required this.image,
     required this.origin,
     required this.location,
+    required this.image,
   });
 
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
-      id: json['id'],
+      id: json['id'] ?? 0,
       name: json['name'] ?? '',
-      status: json['status'] ?? '',
+      status: json['status'] ?? 'unknown',
       species: json['species'] ?? '',
       gender: json['gender'] ?? '',
+      origin: json['origin'] is Map
+          ? (json['origin']['name'] ?? 'Unknown')
+          : (json['origin'] ?? 'Unknown'),
+      location: json['location'] is Map
+          ? (json['location']['name'] ?? 'Unknown')
+          : (json['location'] ?? 'Unknown'),
       image: json['image'] ?? '',
-      origin: json['origin'] != null ? json['origin']['name'] ?? 'Unknown' : 'Unknown',
-      location: json['location'] != null ? json['location']['name'] ?? 'Unknown' : 'Unknown',
+    );
+  }
+
+  Map<String, dynamic> toJson() => toMap();
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'status': status,
+      'species': species,
+      'gender': gender,
+      'origin': origin,
+      'location': location,
+      'image': image,
+    };
+  }
+
+  factory Character.fromMap(Map<String, dynamic> map) {
+    return Character(
+      id: map['id'] ?? 0,
+      name: map['name'] ?? '',
+      status: map['status'] ?? 'unknown',
+      species: map['species'] ?? '',
+      gender: map['gender'] ?? '',
+      origin: map['origin'] ?? 'Unknown',
+      location: map['location'] ?? 'Unknown',
+      image: map['image'] ?? '',
     );
   }
 }

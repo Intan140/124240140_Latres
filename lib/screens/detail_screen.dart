@@ -1,118 +1,245 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import '../models/character_model.dart';
+import '../services/api_service.dart';
+import '../providers/app_provider.dart';
 
-class DetailScreen extends StatefulWidget {
-  final Character character;
-  const DetailScreen({super.key, required this.character});
+class DetailScreen extends StatelessWidget {
+  final int characterId;
 
-  @override
-  State<DetailScreen> createState() => _DetailScreenState();
-}
+  const DetailScreen({super.key, required this.characterId});
 
-class _DetailScreenState extends State<DetailScreen> {
-  bool _isFavorite = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkFavoriteStatus();
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'alive':
+        return const Color(0xFF569E73);
+      case 'dead':
+        return const Color(0xFFD96B8A);
+      default:
+        return const Color(0xFF8D85A3);
+    }
   }
 
-  void _checkFavoriteStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> favs = prefs.getStringList('FAVORITES') ?? [];
-    setState(() {
-      _isFavorite = favs.contains(widget.character.id.toString());
-    });
+  String _buildCharacterDescription(Character char) {
+    final statusDesc = char.status.toLowerCase() == 'alive'
+        ? 'masih hidup dan aktif menjelajahi multisemesta'
+        : char.status.toLowerCase() == 'dead'
+            ? 'telah dinyatakan meninggal dalam perjalanan lintas dimensi'
+            : 'keberadaan serta kondisinya masih menjadi misteri';
+
+    return '${char.name} adalah karakter berjenis ${char.species} (${char.gender}) yang berasal dari ${char.origin}. '
+        'Saat ini, ${char.name} $statusDesc dengan lokasi terakhir yang diketahui berada di ${char.location}.';
   }
 
-  void _toggleFavorite() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> favs = prefs.getStringList('FAVORITES') ?? [];
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    const purplePrimary = Color(0xFF8B6CE8);
+    const purpleDark = Color(0xFF2A2142);
+    const purpleSoft = Color(0xFFEDE8FA);
 
-    setState(() {
-      if (_isFavorite) {
-        favs.remove(widget.character.id.toString());
-        _isFavorite = false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${widget.character.name} dihapus dari favorit')),
-        );
-      } else {
-        favs.add(widget.character.id.toString());
-        _isFavorite = true;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${widget.character.name} ditambahkan ke favorit')),
-        );
-      }
-    });
-    await prefs.setStringList('FAVORITES', favs);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.character.name),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavorite ? Colors.red : Colors.white,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: purpleSoft,
+              borderRadius: BorderRadius.circular(12),
             ),
-            onPressed: _toggleFavorite,
+            child: Icon(icon, color: purplePrimary, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: purpleDark.withAlpha(150),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: purpleDark,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(100),
-                child: Image.network(widget.character.image, width: 160, height: 160, fit: BoxFit.cover),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.character.name,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Card(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    _buildInfoRow('Status', widget.character.status),
-                    _buildInfoRow('Species', widget.character.species),
-                    _buildInfoRow('Gender', widget.character.gender),
-                    _buildInfoRow('Origin', widget.character.origin),
-                    _buildInfoRow('Location', widget.character.location),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
-        ],
-      ),
+  @override
+  Widget build(BuildContext context) {
+    final appProvider = Provider.of<AppProvider>(context);
+    const purplePrimary = Color(0xFF8B6CE8);
+    const purpleDark = Color(0xFF2A2142);
+
+    return FutureBuilder<Character>(
+      future: ApiService.fetchCharacterDetail(characterId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Detail Karakter')),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        } else if (snapshot.hasError || !snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Detail Karakter')),
+            body: Center(child: Text('Error: ${snapshot.error}')),
+          );
+        }
+
+        final char = snapshot.data!;
+        final isFav = appProvider.isFavorite(char.id);
+        final statusColor = _getStatusColor(char.status);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Character Detail'),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  icon: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    color: isFav ? const Color(0xFFD96B8A) : purpleDark,
+                  ),
+                  onPressed: () async {
+                    final added = await appProvider.toggleFavorite(char);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: purpleDark,
+                        content: Text(
+                          added
+                              ? '${char.name} ditambahkan ke favorit'
+                              : '${char.name} dihapus dari favorit',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+   
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Hero(
+                    tag: 'char_${char.id}',
+                    child: Image.network(
+                      char.image,
+                      width: double.infinity,
+                      height: 290,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        char.name,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: purpleDark,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: statusColor.withAlpha(150),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            char.status,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: statusColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                const Text(
+                  'Deskripsi Karakter',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: purplePrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _buildCharacterDescription(char),
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.55,
+                    color: purpleDark.withAlpha(217), // 0.85 * 255
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const Divider(color: Color(0xFFE8E1F7)),
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Informasi Lengkap',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: purplePrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _buildDetailRow(Icons.category_outlined, 'Species', char.species),
+                _buildDetailRow(Icons.wc_outlined, 'Gender', char.gender),
+                _buildDetailRow(Icons.public_outlined, 'Origin', char.origin),
+                _buildDetailRow(Icons.location_on_outlined, 'Last Known Location', char.location),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

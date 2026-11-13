@@ -1,127 +1,123 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/character_model.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_provider.dart';
 import 'detail_screen.dart';
 
-class FavoriteScreen extends StatefulWidget {
+class FavoriteScreen extends StatelessWidget {
   const FavoriteScreen({super.key});
 
   @override
-  State<FavoriteScreen> createState() => _FavoriteScreenState();
-}
-
-class _FavoriteScreenState extends State<FavoriteScreen> {
-  List<Character> _favoriteCharacters = [];
-  bool _isLoading = true;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadFavoriteCharacters();
-  }
-
-  Future<void> _loadFavoriteCharacters() async {
-    setState(() => _isLoading = true);
-    final prefs = await SharedPreferences.getInstance();
-    List<String> favIds = prefs.getStringList('FAVORITES') ?? [];
-
-    if (favIds.isEmpty) {
-      setState(() {
-        _favoriteCharacters = [];
-        _isLoading = false;
-      });
-      return;
-    }
-
-    try {
-      // Mengambil detail karakter favorit secara paralel menggunakan API endpoint /character/[ids]
-      String idsString = favIds.join(',');
-      final response = await http.get(Uri.parse('https://rickandmortyapi.com/api/character/$idsString'));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        List<Character> loadedChars = [];
-        if (favIds.length == 1) {
-          loadedChars.add(Character.fromJson(data));
-        } else {
-          loadedChars = (data as List).map((json) => Character.fromJson(json)).toList();
-        }
-        setState(() {
-          _favoriteCharacters = loadedChars;
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _removeFavorite(Character character) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> favIds = prefs.getStringList('FAVORITES') ?? [];
-    favIds.remove(character.id.toString());
-    await prefs.setStringList('FAVORITES', favIds);
-
-    setState(() {
-      _favoriteCharacters.removeWhere((c) => c.id == character.id);
-    });
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${character.name} dihapus dari daftar favorit')),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    final appProvider = Provider.of<AppProvider>(context);
+    final favorites = appProvider.favorites;
+    const purplePrimary = Color(0xFF8B6CE8);
+    const purpleDark = Color(0xFF2A2142);
+    const purpleSoft = Color(0xFFEDE8FA);
 
-    if (_favoriteCharacters.isEmpty) {
-      return const Center(
-        child: Text(
-          'Belum ada karakter favorit.',
-          style: TextStyle(fontSize: 16, color: Colors.grey),
+    if (favorites.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(color: purpleSoft, shape: BoxShape.circle),
+              child: const Icon(Icons.favorite_border, size: 48, color: purplePrimary),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Belum ada karakter favorit.',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: purpleDark),
+            ),
+          ],
         ),
       );
     }
 
     return ListView.builder(
-      itemCount: _favoriteCharacters.length,
+      padding: const EdgeInsets.all(16),
+      itemCount: favorites.length,
       itemBuilder: (context, index) {
-        final character = _favoriteCharacters[index];
+        final char = favorites[index];
+
         return Dismissible(
-          key: Key(character.id.toString()),
+          key: Key(char.id.toString()),
           direction: DismissDirection.endToStart,
           background: Container(
-            color: Colors.red,
             alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: const Icon(Icons.delete, color: Colors.white),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD96B8A),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
           ),
-          onDismissed: (direction) {
-            _removeFavorite(character);
+          onDismissed: (_) async {
+            await appProvider.removeFavorite(char.id);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: purpleDark,
+                content: Text('${char.name} dihapus dari favorit'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
           },
           child: Card(
-            color: Colors.white,
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: CircleAvatar(backgroundImage: NetworkImage(character.image)),
-              title: Text(character.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Status: ${character.status}'),
-              onTap: () async {
-                await Navigator.push(
+            margin: const EdgeInsets.only(bottom: 14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () {
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => DetailScreen(character: character)),
+                  MaterialPageRoute(
+                    builder: (_) => DetailScreen(characterId: char.id),
+                  ),
                 );
-                _loadFavoriteCharacters();
               },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        char.image,
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            char.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: purpleDark,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${char.status} • ${char.species}',
+                            style: TextStyle(
+                              color: purpleDark.withAlpha(166), 
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: purplePrimary),
+                  ],
+                ),
+              ),
             ),
           ),
         );
